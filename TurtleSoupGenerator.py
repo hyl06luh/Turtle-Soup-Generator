@@ -13,13 +13,30 @@ import re
 from threading import Thread
 
 from dotenv import load_dotenv
+import sys
 
-# 加载 api_key.env 文件
+def get_app_dir():
+    """获取应用程序的基础目录（开发时为脚本目录，打包后为EXE目录）"""
+    if getattr(sys, 'frozen', False):
+        # 打包后：sys.executable 是 EXE 的路径
+        return os.path.dirname(sys.executable)
+    else:
+        # 开发时：使用脚本所在目录
+        return os.path.dirname(os.path.abspath(__file__))
+
+# 获取应用程序目录
+app_dir = get_app_dir()
+
+# 将工作目录切换到应用程序目录
+os.chdir(app_dir)
+
+# 设置 .env 文件路径
+env_path = os.path.join(app_dir, "api_key.env")
+
 load_dotenv(dotenv_path="api_key.env")
 SILICONFLOW_API_KEY = os.getenv("SILICONFLOW_API_KEY")
 if not SILICONFLOW_API_KEY:
     raise ValueError("未找到 SiliconFlow API 密钥，请在 api_key.env 文件中配置 SILICONFLOW_API_KEY")
-
 
 # 海龟汤 JSON Schema 定义
 TURTLE_SOUP_SCHEMA = {
@@ -75,7 +92,7 @@ class TurtleSoupGenerator:
         self.generate_model = ModelFactory.create(
             model_platform=ModelPlatformType.SILICONFLOW,
             model_type=ModelType.SILICONFLOW_DEEPSEEK_V3,
-            model_config_dict={"temperature": 1.2, "top_p": 0.9}
+            model_config_dict={"temperature": 0.7, "top_p": 0.5}
         )
         self.generate_agent = ChatAgent(
             system_message=BaseMessage(
@@ -95,7 +112,7 @@ class TurtleSoupGenerator:
         self.check_model = ModelFactory.create(
             model_platform=ModelPlatformType.SILICONFLOW,
             model_type=ModelType.SILICONFLOW_DEEPSEEK_V3,
-            model_config_dict={"temperature": 0.5, "top_p": 0.7}
+            model_config_dict={"temperature": 0.3, "top_p": 0.5}
         )
         self.check_agent = ChatAgent(
             system_message=BaseMessage(
@@ -118,7 +135,7 @@ class TurtleSoupGenerator:
         self.question_model = ModelFactory.create(
             model_platform=ModelPlatformType.SILICONFLOW,
             model_type=ModelType.SILICONFLOW_DEEPSEEK_V3,
-            model_config_dict={"temperature": 0.3, "top_p": 0.5}
+            model_config_dict={"temperature": 1.2, "top_p": 0.9}
         )
         self.question_agent = ChatAgent(
             system_message=BaseMessage(
@@ -238,7 +255,7 @@ class TurtleSoupGenerator:
                 f"Puzzle answer: {self.current_puzzle['answer']}\n"
                 f"User answer: {user_answer}\n"
                 "Evaluate the user's answer by providing: "
-                "1. A score (0.0-1.0) indicating correctness. "
+                "1. A score (0.0-100.0) indicating correctness. "
                 "2. A compare field (50-500 words in Chinese) explaining the evaluation. "
                 "3. A list of 1-5 keywords (2-10 words each in Chinese) summarizing key points. "
                 "Output must be in Chinese and in JSON format."
@@ -249,8 +266,8 @@ class TurtleSoupGenerator:
                 meta_dict={},
                 content=prompt
             )
-            self.stream_output("海龟汤答案：")
-            self.stream_output(self.current_puzzle['answer'])
+            await self.stream_text("海龟汤答案：")
+            await self.stream_output(self.current_puzzle['answer'])
             for attempt in range(self.max_retries):
                 try:
                     response = self.check_agent.step(message)
